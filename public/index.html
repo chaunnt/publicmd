@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>publicmd – Markdown Viewer</title>
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/github.min.css"
+    />
+    <style>
+      /* ── reset & base ───────────────────────────── */
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          Helvetica, Arial, sans-serif;
+        background: #f6f8fa;
+        color: #24292f;
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+      }
+
+      /* ── header ─────────────────────────────────── */
+      header {
+        background: #24292f;
+        color: #fff;
+        padding: 0 1.5rem;
+        height: 52px;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        flex-shrink: 0;
+      }
+      header svg { width: 24px; height: 24px; fill: #fff; }
+      header h1 { font-size: 1.1rem; font-weight: 600; letter-spacing: .02em; }
+
+      /* ── layout ─────────────────────────────────── */
+      .layout {
+        display: flex;
+        flex: 1;
+        overflow: hidden;
+      }
+
+      /* ── sidebar ─────────────────────────────────── */
+      aside {
+        width: 260px;
+        background: #fff;
+        border-right: 1px solid #d0d7de;
+        display: flex;
+        flex-direction: column;
+        flex-shrink: 0;
+        overflow: hidden;
+      }
+      .sidebar-header {
+        padding: 0.9rem 1rem 0.6rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: #57606a;
+        text-transform: uppercase;
+        letter-spacing: .06em;
+        border-bottom: 1px solid #d0d7de;
+      }
+      #doc-list {
+        list-style: none;
+        overflow-y: auto;
+        flex: 1;
+      }
+      #doc-list li a {
+        display: block;
+        padding: 0.6rem 1rem;
+        text-decoration: none;
+        color: #24292f;
+        font-size: 0.9rem;
+        border-left: 3px solid transparent;
+        transition: background .12s, border-color .12s;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      #doc-list li a:hover { background: #f6f8fa; }
+      #doc-list li a.active {
+        background: #ddf4ff;
+        border-left-color: #0969da;
+        color: #0969da;
+        font-weight: 600;
+      }
+      #doc-list li.empty {
+        padding: 1rem;
+        color: #57606a;
+        font-size: 0.85rem;
+      }
+
+      /* ── main content ─────────────────────────────── */
+      main {
+        flex: 1;
+        overflow-y: auto;
+        padding: 2rem 2.5rem;
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+      }
+      #toolbar {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+      #toolbar button {
+        background: #f6f8fa;
+        border: 1px solid #d0d7de;
+        border-radius: 6px;
+        padding: 0.3rem 0.75rem;
+        font-size: 0.8rem;
+        cursor: pointer;
+        color: #24292f;
+        transition: background .12s;
+      }
+      #toolbar button:hover { background: #eaeef2; }
+      #toolbar button.active { background: #ddf4ff; border-color: #0969da; color: #0969da; }
+      #toolbar .sep { width: 1px; height: 20px; background: #d0d7de; margin: 0 .25rem; }
+      #doc-title {
+        font-size: 1rem;
+        font-weight: 600;
+        margin-left: auto;
+        color: #57606a;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 300px;
+      }
+
+      /* ── panels ─────────────────────────────────── */
+      #panels { display: flex; gap: 1rem; flex: 1; min-height: 0; }
+      .panel {
+        background: #fff;
+        border: 1px solid #d0d7de;
+        border-radius: 8px;
+        overflow: auto;
+        flex: 1;
+      }
+      #panel-rendered { padding: 2rem; }
+      #panel-raw {
+        display: none;
+        padding: 1.25rem;
+      }
+      #panel-raw pre {
+        font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+        font-size: 0.85rem;
+        line-height: 1.6;
+        white-space: pre-wrap;
+        word-break: break-word;
+        color: #24292f;
+      }
+
+      /* ── markdown styles ──────────────────────────── */
+      .md h1, .md h2, .md h3, .md h4, .md h5, .md h6 {
+        margin: 1.5rem 0 0.75rem;
+        line-height: 1.3;
+        font-weight: 600;
+      }
+      .md h1 { font-size: 2rem; border-bottom: 1px solid #d0d7de; padding-bottom: .5rem; }
+      .md h2 { font-size: 1.5rem; border-bottom: 1px solid #d0d7de; padding-bottom: .3rem; }
+      .md h3 { font-size: 1.2rem; }
+      .md p { margin: 0.75rem 0; line-height: 1.7; }
+      .md ul, .md ol { margin: 0.75rem 0 0.75rem 1.5rem; }
+      .md li { margin: 0.3rem 0; line-height: 1.7; }
+      .md blockquote {
+        border-left: 4px solid #d0d7de;
+        padding: 0.5rem 1rem;
+        color: #57606a;
+        background: #f6f8fa;
+        border-radius: 0 4px 4px 0;
+        margin: 0.75rem 0;
+      }
+      .md code {
+        background: #eaeef2;
+        padding: 0.15em 0.4em;
+        border-radius: 4px;
+        font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+        font-size: 0.9em;
+      }
+      .md pre {
+        background: #f6f8fa;
+        border: 1px solid #d0d7de;
+        border-radius: 6px;
+        padding: 1rem;
+        overflow-x: auto;
+        margin: 0.75rem 0;
+      }
+      .md pre code { background: none; padding: 0; font-size: 0.85rem; }
+      .md table { border-collapse: collapse; width: 100%; margin: 0.75rem 0; }
+      .md th, .md td { border: 1px solid #d0d7de; padding: 0.5rem 0.75rem; }
+      .md th { background: #f6f8fa; font-weight: 600; }
+      .md tr:nth-child(even) td { background: #f6f8fa; }
+      .md a { color: #0969da; text-decoration: none; }
+      .md a:hover { text-decoration: underline; }
+      .md img { max-width: 100%; border-radius: 4px; }
+      .md hr { border: none; border-top: 1px solid #d0d7de; margin: 1.5rem 0; }
+
+      /* ── welcome / placeholder ────────────────────── */
+      #welcome {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+        color: #57606a;
+        gap: 0.75rem;
+      }
+      #welcome svg { width: 56px; height: 56px; fill: #d0d7de; }
+      #welcome p { font-size: 1rem; }
+
+      /* ── loading/error ────────────────────────────── */
+      .loading { color: #57606a; padding: 2rem; font-size: 0.9rem; }
+      .error { color: #cf222e; padding: 2rem; font-size: 0.9rem; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <!-- Markdown logo mark -->
+      <svg viewBox="0 0 208 128" xmlns="http://www.w3.org/2000/svg">
+        <rect width="208" height="128" rx="16" fill="none"/>
+        <path d="M30 98V30h20l20 25 20-25h20v68H90V59L70 84 50 59v39zm125 0l-30-33h20V30h20v35h20z"/>
+      </svg>
+      <h1>publicmd</h1>
+    </header>
+
+    <div class="layout">
+      <aside>
+        <div class="sidebar-header">Documents</div>
+        <ul id="doc-list"><li class="empty">Loading…</li></ul>
+      </aside>
+
+      <main>
+        <div id="toolbar" style="display:none">
+          <button id="btn-rendered" class="active" onclick="showPanel('rendered')">Rendered</button>
+          <button id="btn-raw" onclick="showPanel('raw')">Raw</button>
+          <div class="sep"></div>
+          <span id="doc-title"></span>
+        </div>
+
+        <div id="panels" style="display:none">
+          <div id="panel-rendered" class="panel md"></div>
+          <div id="panel-raw" class="panel"><pre id="raw-content"></pre></div>
+        </div>
+
+        <div id="welcome">
+          <svg viewBox="0 0 208 128" xmlns="http://www.w3.org/2000/svg">
+            <path d="M30 98V30h20l20 25 20-25h20v68H90V59L70 84 50 59v39zm125 0l-30-33h20V30h20v35h20z"/>
+          </svg>
+          <p>Select a document from the sidebar to get started.</p>
+        </div>
+      </main>
+    </div>
+
+    <script>
+      let currentDoc = null;
+
+      async function loadDocList() {
+        const list = document.getElementById('doc-list');
+        try {
+          const res = await fetch('/api/docs');
+          const docs = await res.json();
+          if (!docs.length) {
+            list.innerHTML = '<li class="empty">No documents found.</li>';
+            return;
+          }
+          list.innerHTML = docs
+            .map(
+              (d) =>
+                `<li><a href="#" data-url="${d.url}" data-name="${d.name}"
+                    onclick="openDoc(event, this)">${d.name}</a></li>`
+            )
+            .join('');
+        } catch (e) {
+          list.innerHTML = '<li class="empty">Failed to load docs.</li>';
+        }
+      }
+
+      async function openDoc(event, el) {
+        event.preventDefault();
+        const url = el.dataset.url;
+        const name = el.dataset.name;
+
+        document.querySelectorAll('#doc-list a').forEach((a) => a.classList.remove('active'));
+        el.classList.add('active');
+
+        document.getElementById('panel-rendered').innerHTML =
+          '<p class="loading">Loading…</p>';
+        document.getElementById('welcome').style.display = 'none';
+        document.getElementById('toolbar').style.display = 'flex';
+        document.getElementById('panels').style.display = 'flex';
+        document.getElementById('doc-title').textContent = name + '.md';
+
+        try {
+          const res = await fetch(url);
+          if (!res.ok) throw new Error('Not found');
+          const data = await res.json();
+          document.getElementById('panel-rendered').innerHTML = data.html;
+          document.getElementById('raw-content').textContent = data.raw;
+          currentDoc = data;
+        } catch (e) {
+          document.getElementById('panel-rendered').innerHTML =
+            '<p class="error">Failed to load document.</p>';
+        }
+      }
+
+      function showPanel(name) {
+        const rendered = document.getElementById('panel-rendered');
+        const raw = document.getElementById('panel-raw');
+        const btnR = document.getElementById('btn-rendered');
+        const btnRaw = document.getElementById('btn-raw');
+        if (name === 'rendered') {
+          rendered.style.display = 'block';
+          raw.style.display = 'none';
+          btnR.classList.add('active');
+          btnRaw.classList.remove('active');
+        } else {
+          rendered.style.display = 'none';
+          raw.style.display = 'block';
+          btnR.classList.remove('active');
+          btnRaw.classList.add('active');
+        }
+      }
+
+      loadDocList();
+    </script>
+  </body>
+</html>
